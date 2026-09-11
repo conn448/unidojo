@@ -1,4 +1,4 @@
-const CACHE = 'unidojo-shell-v2';
+const CACHE = 'unidojo-shell-v3';
 const SHELL = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', event => {
