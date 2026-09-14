@@ -24,16 +24,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validate HTML and JavaScript structure
+      - name: Validate known-good Unidojo structure
         run: |
           python - <<'PY'
           from pathlib import Path
           s = Path('index.html').read_text(encoding='utf-8')
-          assert '<div id="app"></div>' in s
-          assert 'function boot()' in s
-          assert 'boot();' in s
-          assert '</body></html>' in s
-          print('Unidojo source validation passed')
+          required = [
+              '<div id="app">',
+              'function ready()',
+              'function home()',
+              'function markets()',
+              'function train()',
+              'function account()',
+              'ready();',
+              '</body></html>'
+          ]
+          missing = [x for x in required if x not in s]
+          if missing:
+              raise SystemExit('Missing expected app markers: ' + ', '.join(missing))
+          print('Known-good Unidojo source validation passed')
           PY
 
       - name: Configure Pages
@@ -52,7 +61,7 @@ jobs:
           echo "Testing $URL"
           for i in 1 2 3 4 5 6; do
             if curl -fsSL --max-time 15 "$URL" -o /tmp/unidojo.html; then
-              if grep -q "Unidojo" /tmp/unidojo.html && grep -q "id=\"app\"" /tmp/unidojo.html; then
+              if grep -q "Unidojo" /tmp/unidojo.html && grep -q 'id="app"' /tmp/unidojo.html; then
                 echo "LIVE SITE HTML OK"
                 exit 0
               fi
