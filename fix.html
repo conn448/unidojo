@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Unidojo — Quiz Fix</title>
+<style>
+html,body{margin:0;height:100%;background:#080808;color:#fff;font-family:system-ui,-apple-system,sans-serif;overflow:hidden}
+iframe{display:block;width:100%;height:100%;border:0}
+</style>
+</head>
+<body>
+<iframe id="dojo" src="index.html?quizfix=1"></iframe>
+<script>
+(function(){
+  var frame=document.getElementById('dojo');
+  function harden(){
+    var w=frame.contentWindow,d=frame.contentDocument;
+    if(!d)return;
+    var s=d.getElementById('__quiz_fix_style');
+    if(!s){
+      s=d.createElement('style');s.id='__quiz_fix_style';
+      s.textContent='.nav{display:none!important}.wrap{padding-bottom:24px!important}#answers{position:relative;z-index:9999}.choice{position:relative!important;z-index:10000!important;pointer-events:auto!important;touch-action:manipulation!important}';
+      d.head.appendChild(s);
+    }
+    if(!d.__quizFixBound){
+      d.__quizFixBound=true;
+      d.addEventListener('click',function(e){
+        var b=e.target.closest&&e.target.closest('#answers .choice');
+        if(!b)return;
+        e.preventDefault();e.stopPropagation();
+        var m=(b.getAttribute('onclick')||'').match(/answer\\((\\d+),(\\d+)\\)/);
+        if(m&&typeof w.answer==='function')w.answer(Number(m[1]),Number(m[2]));
+      },true);
+    }
+  }
+  frame.addEventListener('load',function(){
+    harden();
+    setInterval(harden,500);
+  });
+})();
+</script>
+</body>
+</html>
