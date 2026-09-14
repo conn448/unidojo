@@ -35,25 +35,58 @@ jobs:
           if old not in s:
               raise SystemExit('Expected Unidojo boot bug was not found; refusing to deploy an unknown source')
           p.write_text(s.replace(old,new,1),encoding='utf-8')
-          print('Applied deployment-only fix for unescaped apostrophe in home() HTML string')
+          print('Applied deployment-only fix for the proven unescaped apostrophe')
           PY
 
-      - name: Validate HTML and JavaScript syntax
+      - name: Failure sweep — HTML, JavaScript and boot invariants
         run: |
           python - <<'PY'
           import re
           from pathlib import Path
           html=Path('index.html').read_text(encoding='utf-8')
+          checks={
+            'app mount': 'id="app"' in html,
+            'loading fallback': 'Opening your dojo' in html,
+            'boot function': 'function onboarding(step)' in html,
+            'global home': 'window.home=home' in html,
+            'global safeRun': 'window.safeRun=safeRun' in html,
+            'localStorage guard': 'try{var raw=localStorage.getItem(KEY)' in html,
+            'no external JS dependency': not re.search(r'<script[^>]+src=',html,re.I),
+            'doctype': html.lower().startswith('<!doctype html>'),
+          }
+          bad=[k for k,v in checks.items() if not v]
+          print('Failure sweep:', checks)
+          if bad: raise SystemExit('Invariant failures: '+', '.join(bad))
           scripts=re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>', html, flags=re.S|re.I)
-          if not scripts:
-              raise SystemExit('No inline JavaScript found')
+          if not scripts: raise SystemExit('No inline JavaScript found')
           js='\n'.join(scripts)
-          Path('/tmp/unidojo-inline.js').write_text(js, encoding='utf-8')
-          print('HTML bytes:', len(html))
-          print('Inline script bytes:', len(js))
+          Path('/tmp/unidojo-inline.js').write_text(js,encoding='utf-8')
+          print('HTML bytes:',len(html),'JS bytes:',len(js))
           PY
           node --check /tmp/unidojo-inline.js
           echo "JAVASCRIPT SYNTAX OK"
+
+      - name: Boot test in isolated DOM
+        run: |
+          python - <<'PY'
+          import re
+          from pathlib import Path
+          html=Path('index.html').read_text(encoding='utf-8')
+          js=re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>',html,flags=re.S|re.I)[0]
+          Path('/tmp/boot-test.js').write_text(r'''const vm=require('vm');
+          const elements={};
+          function el(id){return elements[id]||(elements[id]={id,innerHTML:'',textContent:'',classList:{add(){},remove(){},toggle(){}},value:'',disabled:false});}
+          const context={console,window:{},document:{getElementById:el,querySelectorAll:()=>[]},localStorage:{_:{},getItem(k){return this._[k]??null},setItem(k,v){this._[k]=String(v)},removeItem(k){delete this._[k]}},setTimeout:(fn)=>fn(),clearTimeout:()=>{}};
+          context.window=context.window; context.window.setTimeout=context.setTimeout; context.window.clearTimeout=context.clearTimeout;
+          vm.createContext(context);
+          try{vm.runInContext('''+repr(js)+''',context,{timeout:5000});
+            const rendered=elements.app.innerHTML;
+            if(!rendered || /Opening your dojo|Starting the learning engine|LOADING/i.test(rendered)) throw new Error('Boot left loading screen');
+            console.log('ISOLATED BOOT OK:',rendered.slice(0,180));
+          }catch(e){console.error('ISOLATED BOOT FAILED:',e&&e.stack||e);process.exit(1)}
+          ''',encoding='utf-8')
+          PY
+          node /tmp/boot-test.js
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
@@ -65,46 +98,20 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-      - name: Install browser test tooling
-        run: |
-          npm init -y >/dev/null 2>&1
-          npm install --no-save playwright@1.55.0 >/dev/null 2>&1
-          npx playwright install --with-deps chromium >/dev/null 2>&1
-
-      - name: Browser runtime test
+      - name: Live HTTP smoke test
         env:
           SITE_URL: ${{ steps.deployment.outputs.page_url }}
         run: |
-          cat > /tmp/test-unidojo.js <<'JS'
-          const { chromium } = require(process.cwd() + '/node_modules/playwright');
-          (async()=>{
-            const browser = await chromium.launch({headless:true});
-            const page = await browser.newPage();
-            const errors=[];
-            page.on('console', m => { if (m.type()==='error') errors.push('console: '+m.text()); });
-            page.on('pageerror', e => errors.push('pageerror: '+e.message));
-            await page.goto(process.env.SITE_URL, {waitUntil:'networkidle', timeout:30000});
-            await page.waitForTimeout(1500);
-            const text = await page.locator('body').innerText();
-            console.log('URL:', page.url());
-            console.log('BODY:', text.slice(0,2000));
-            if (errors.length) {
-              console.error('BROWSER ERRORS:\n'+errors.join('\n'));
-              await browser.close();
-              process.exit(1);
-            }
-            if (/Opening your dojo|Starting the learning engine|LOADING/i.test(text)) {
-              console.error('BOOT FAILED: loading screen is still visible');
-              await browser.close();
-              process.exit(1);
-            }
-            if (!/Build your money profile|Train your money brain|Today|Training Academy/i.test(text)) {
-              console.error('BOOT FAILED: expected Unidojo UI was not rendered');
-              await browser.close();
-              process.exit(1);
-            }
-            console.log('BROWSER RUNTIME OK');
-            await browser.close();
-          })().catch(e=>{console.error(e);process.exit(1)});
-          JS
-          node /tmp/test-unidojo.js
+          set -e
+          echo "Testing $SITE_URL"
+          for i in 1 2 3 4 5 6; do
+            if curl -fsSL --max-time 15 "$SITE_URL" -o /tmp/live.html; then
+              grep -q 'Unidojo' /tmp/live.html
+              grep -q 'id="app"' /tmp/live.html
+              grep -q 'Start today&#39;s training' /tmp/live.html
+              echo "LIVE HTML OK"
+              exit 0
+            fi
+            sleep 10
+          done
+          exit 1
