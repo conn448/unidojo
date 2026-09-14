@@ -21,7 +21,9 @@ button:hover{border-color:#666}button:active{transform:translateY(1px)}button:di
 <nav class="nav"><button data-nav="home">⌂<br>Today</button><button data-nav="markets">◈<br>Markets</button><button data-nav="train">◎<br>Train</button><button data-nav="account">●<br>Profile</button></nav>
 <script>
 (function(){'use strict';
-const KEY='unidojo-mvp-v3';
+const KEY='unidojo-mvp-v4';
+const OLD_KEY='unidojo-mvp-v3';
+try{localStorage.removeItem(OLD_KEY)}catch(e){}
 const DEFAULT={profile:null,xp:0,streak:0,lastDay:null,completed:[],hearts:5,cash:10000,holdings:{}};
 let S=load(), step=1, screen='home';
 function load(){try{const x=JSON.parse(localStorage.getItem(KEY)||'null');return x&&typeof x==='object'?Object.assign({},DEFAULT,x):JSON.parse(JSON.stringify(DEFAULT))}catch(e){return JSON.parse(JSON.stringify(DEFAULT))}}
