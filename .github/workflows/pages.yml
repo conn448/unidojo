@@ -24,16 +24,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Apply deployment-only boot hotfix
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          old="Start today's training"
+          new="Start today&#39;s training"
+          if old not in s:
+              raise SystemExit('Expected Unidojo boot bug was not found; refusing to deploy an unknown source')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+          print('Applied deployment-only fix for unescaped apostrophe in home() HTML string')
+          PY
+
       - name: Validate HTML and JavaScript syntax
         run: |
           python - <<'PY'
           import re
           from pathlib import Path
           html=Path('index.html').read_text(encoding='utf-8')
-          scripts=re.findall(r'<script(?:\\s[^>]*)?>(.*?)</script>', html, flags=re.S|re.I)
+          scripts=re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>', html, flags=re.S|re.I)
           if not scripts:
               raise SystemExit('No inline JavaScript found')
-          js='\\n'.join(scripts)
+          js='\n'.join(scripts)
           Path('/tmp/unidojo-inline.js').write_text(js, encoding='utf-8')
           print('HTML bytes:', len(html))
           print('Inline script bytes:', len(js))
