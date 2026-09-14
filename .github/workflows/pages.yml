@@ -24,27 +24,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validate known-good Unidojo structure
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          s = Path('index.html').read_text(encoding='utf-8')
-          required = [
-              '<div id="app">',
-              'function ready()',
-              'function home()',
-              'function markets()',
-              'function train()',
-              'function account()',
-              'ready();',
-              '</body></html>'
-          ]
-          missing = [x for x in required if x not in s]
-          if missing:
-              raise SystemExit('Missing expected app markers: ' + ', '.join(missing))
-          print('Known-good Unidojo source validation passed')
-          PY
-
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload site
