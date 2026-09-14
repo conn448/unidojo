@@ -1,1 +1,1 @@
-{"$schema":"https://openapi.vercel.sh/vercel.json","framework":null,"buildCommand":"","outputDirectory":"."}
+{"$schema":"https://openapi.vercel.sh/vercel.json","framework":null,"buildCommand":"","outputDirectory":".","headers":[{"source":"/(.*)","headers":[{"key":"Cache-Control","value":"no-store, no-cache, must-revalidate"}]}]}
