@@ -32,3 +32,20 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
+      - name: Smoke test live site
+        run: |
+          set -e
+          URL="${{ steps.deployment.outputs.page_url }}"
+          echo "Testing $URL"
+          for i in 1 2 3 4 5 6; do
+            if curl -fsSL --max-time 15 "$URL" -o /tmp/unidojo.html; then
+              if grep -q "Unidojo" /tmp/unidojo.html && grep -q "id=\"app\"" /tmp/unidojo.html; then
+                echo "LIVE SITE OK"
+                exit 0
+              fi
+            fi
+            echo "Site not ready yet; retry $i"
+            sleep 10
+          done
+          echo "LIVE SITE FAILED"
+          exit 1
