@@ -28,3 +28,5 @@ the onboarding choices for that visit.
 Tailwind is loaded from its CDN, so the first visit needs network access. The
 service worker caches the app shell after that visit; change the `CACHE` version
 in `sw.js` whenever the shell changes and redeploy.
+
+<!-- deployment trigger: keep application files unchanged -->
