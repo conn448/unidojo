@@ -24,6 +24,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate HTML and JavaScript syntax
+        run: |
+          python - <<'PY'
+          import re
+          from pathlib import Path
+          html=Path('index.html').read_text(encoding='utf-8')
+          scripts=re.findall(r'<script(?:\\s[^>]*)?>(.*?)</script>', html, flags=re.S|re.I)
+          if not scripts:
+              raise SystemExit('No inline JavaScript found')
+          js='\\n'.join(scripts)
+          Path('/tmp/unidojo-inline.js').write_text(js, encoding='utf-8')
+          print('HTML bytes:', len(html))
+          print('Inline script bytes:', len(js))
+          PY
+          node --check /tmp/unidojo-inline.js
+          echo "JAVASCRIPT SYNTAX OK"
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload site
@@ -33,20 +50,47 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
-      - name: Smoke test live site
+
+      - name: Install browser test tooling
         run: |
-          set -e
-          URL="${{ steps.deployment.outputs.page_url }}"
-          echo "Testing $URL"
-          for i in 1 2 3 4 5 6; do
-            if curl -fsSL --max-time 15 "$URL" -o /tmp/unidojo.html; then
-              if grep -q "Unidojo" /tmp/unidojo.html && grep -q 'id="app"' /tmp/unidojo.html; then
-                echo "LIVE SITE HTML OK"
-                exit 0
-              fi
-            fi
-            echo "Site not ready yet; retry $i"
-            sleep 10
-          done
-          echo "LIVE SITE FAILED"
-          exit 1
+          npm init -y >/dev/null 2>&1
+          npm install --no-save playwright@1.55.0 >/dev/null 2>&1
+          npx playwright install --with-deps chromium >/dev/null 2>&1
+
+      - name: Browser runtime test
+        env:
+          SITE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          cat > /tmp/test-unidojo.js <<'JS'
+          const { chromium } = require(process.cwd() + '/node_modules/playwright');
+          (async()=>{
+            const browser = await chromium.launch({headless:true});
+            const page = await browser.newPage();
+            const errors=[];
+            page.on('console', m => { if (m.type()==='error') errors.push('console: '+m.text()); });
+            page.on('pageerror', e => errors.push('pageerror: '+e.message));
+            await page.goto(process.env.SITE_URL, {waitUntil:'networkidle', timeout:30000});
+            await page.waitForTimeout(1500);
+            const text = await page.locator('body').innerText();
+            console.log('URL:', page.url());
+            console.log('BODY:', text.slice(0,2000));
+            if (errors.length) {
+              console.error('BROWSER ERRORS:\n'+errors.join('\n'));
+              await browser.close();
+              process.exit(1);
+            }
+            if (/Opening your dojo|Starting the learning engine|LOADING/i.test(text)) {
+              console.error('BOOT FAILED: loading screen is still visible');
+              await browser.close();
+              process.exit(1);
+            }
+            if (!/Build your money profile|Train your money brain|Today|Training Academy/i.test(text)) {
+              console.error('BOOT FAILED: expected Unidojo UI was not rendered');
+              await browser.close();
+              process.exit(1);
+            }
+            console.log('BROWSER RUNTIME OK');
+            await browser.close();
+          })().catch(e=>{console.error(e);process.exit(1)});
+          JS
+          node /tmp/test-unidojo.js
