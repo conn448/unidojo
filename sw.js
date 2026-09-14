@@ -1,42 +1,34 @@
-const CACHE = 'unidojo-shell-v6';
+const CACHE = 'unidojo-shell-v7';
 const SHELL = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE).then(cache => cache.addAll(SHELL))
-  );
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)));
   self.skipWaiting();
 });
 
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(
-        keys
-          .filter(key => key !== CACHE)
-          .map(key => caches.delete(key))
-      )
-    )
+    caches.keys().then(keys => Promise.all(
+      keys.filter(key => key !== CACHE).map(key => caches.delete(key))
+    )).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
-
   const url = new URL(event.request.url);
-  const sameOrigin = url.origin === self.location.origin;
-  const tailwind = url.hostname === 'cdn.tailwindcss.com';
-  if (!sameOrigin && !tailwind) return;
+  if (url.origin !== self.location.origin && url.hostname !== 'cdn.tailwindcss.com') return;
 
-  // Always try to get the HTML shell fresh so new deployments are not
-  // trapped behind an old cached index.html. Fall back to cache offline.
-  if (sameOrigin && event.request.mode === 'navigate') {
+  // HTML/navigation must always prefer the network so a broken/stale MVP
+  // cannot trap the user on an old build. Cache is the offline fallback.
+  if (event.request.mode === 'navigate' || url.pathname.endsWith('/index.html') || url.pathname === '/') {
     event.respondWith(
-      fetch(event.request)
+      fetch(event.request, { cache: 'no-store' })
         .then(response => {
-          const copy = response.clone();
-          caches.open(CACHE).then(cache => cache.put('./', copy));
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE).then(cache => cache.put(event.request, copy));
+          }
           return response;
         })
         .catch(() => caches.match(event.request).then(hit => hit || caches.match('./index.html')))
@@ -45,14 +37,12 @@ self.addEventListener('fetch', event => {
   }
 
   event.respondWith(
-    caches.match(event.request).then(hit =>
-      hit || fetch(event.request).then(response => {
-        if (response.ok) {
-          const copy = response.clone();
-          caches.open(CACHE).then(cache => cache.put(event.request, copy));
-        }
-        return response;
-      })
-    )
+    caches.match(event.request).then(hit => hit || fetch(event.request).then(response => {
+      if (response.ok) {
+        const copy = response.clone();
+        caches.open(CACHE).then(cache => cache.put(event.request, copy));
+      }
+      return response;
+    }))
   );
 });
