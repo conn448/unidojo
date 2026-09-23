@@ -1,1 +1,23 @@
-{"$schema":"https://openapi.vercel.sh/vercel.json","framework":null,"buildCommand":"","outputDirectory":".","headers":[{"source":"/(.*)","headers":[{"key":"Cache-Control","value":"no-store, no-cache, must-revalidate"}]}]}
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "cleanUrls": false,
+  "trailingSlash": false,
+  "redirects": [
+    { "source": "/fresh", "destination": "/fresh/index.html", "statusCode": 302 },
+    { "source": "/fresh/", "destination": "/fresh/index.html", "statusCode": 302 },
+    { "source": "/onboarding", "destination": "/onboarding.html", "statusCode": 302 },
+    { "source": "/quiz", "destination": "/quiz.html", "statusCode": 302 },
+    { "source": "/reset", "destination": "/reset.html", "statusCode": 302 }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, max-age=0" },
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    }
+  ]
+}
